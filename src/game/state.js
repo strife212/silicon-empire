@@ -253,7 +253,10 @@ function autoBuyStep(dt) {
       const cost = infraCost(item, G.infra[item.id] || 0);
       if (cost <= G.credits && item.cap / cost > bestScore) { best = item; bestScore = item.cap / cost; }
     }
-    if (best) { buyInfra(best.id); return; }
+    if (best && buyInfra(best.id)) {
+      events.emit('autobuy', { label: best.name, key: 'infra:' + best.id });
+      return;
+    }
   }
   // then best credits/sec per credit
   let best = -1, bestScore = 0;
@@ -265,7 +268,9 @@ function autoBuyStep(dt) {
     const score = D.rate[t.id] / cost;
     if (score > bestScore) { bestScore = score; best = t.id; }
   }
-  if (best >= 0) buyTier(best, 1);
+  if (best >= 0 && buyTier(best, 1) > 0) {
+    events.emit('autobuy', { label: TIERS[best].name, key: 'tier:' + best });
+  }
 }
 
 // ---------- jobs ----------

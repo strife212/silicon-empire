@@ -71,6 +71,21 @@ export function runBootSplash() {
   }, 230);
 }
 
+// ---------- auto-buy notification (small, replaces in place, no stacking) ----------
+const autoBuyNote = { key: null, count: 0, timer: null };
+function showAutoBuyNote({ label, key }) {
+  const el = $('autobuy-note');
+  if (autoBuyNote.key === key && el.classList.contains('show')) autoBuyNote.count++;
+  else { autoBuyNote.key = key; autoBuyNote.count = 1; }
+  el.textContent = `⚙ auto-buy ▸ ${label}` + (autoBuyNote.count > 1 ? ` ×${autoBuyNote.count}` : '');
+  el.classList.add('show');
+  clearTimeout(autoBuyNote.timer);
+  autoBuyNote.timer = setTimeout(() => {
+    el.classList.remove('show');
+    autoBuyNote.key = null;
+  }, 2800);
+}
+
 // ---------- toasts ----------
 export function toast(msg, cls = '') {
   const el = document.createElement('div');
@@ -453,6 +468,7 @@ export function initHUD() {
   });
   events.on('reboot', (n) => toast(`♻ Rebooted ${n} machine${n > 1 ? 's' : ''}`));
   events.on('shard', ({ tier }) => toast(`✨ Probability shard! Free ${TIERS[tier].short} materialized`, 'gold'));
+  events.on('autobuy', showAutoBuyNote);
   events.on('jobOffered', () => updateJob());
   events.on('jobClaimed', (j) => toast(`📋 Contract paid: ₵${fmt(j.reward)}`, 'gold'));
   events.on('loaded', () => refresh());
