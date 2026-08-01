@@ -309,6 +309,33 @@ export function initWorld(container) {
     flyTo(target, pos, 1.1, () => { controls.autoRotate = true; });
   }
 
+  // ---------- click a room in 3D to center it ----------
+  const raycaster = new THREE.Raycaster();
+  const ndc = new THREE.Vector2();
+  let pointerDownAt = null;
+  renderer.domElement.addEventListener('pointerdown', (e) => {
+    pointerDownAt = { x: e.clientX, y: e.clientY };
+  });
+  renderer.domElement.addEventListener('pointerup', (e) => {
+    if (!pointerDownAt) return;
+    const dx = e.clientX - pointerDownAt.x, dy = e.clientY - pointerDownAt.y;
+    pointerDownAt = null;
+    if (dx * dx + dy * dy > 36) return; // that was a drag, not a click
+    ndc.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
+    raycaster.setFromCamera(ndc, camera);
+    const hits = raycaster.intersectObjects(scene.children, true);
+    if (!hits.length) return;
+    const p = hits[0].point;
+    // rooms line up along x — pick the revealed room containing the hit point
+    let bestEra = -1, bestD = Infinity;
+    for (const def of ROOMS) {
+      if (!revealed[def.era]) continue;
+      const d = Math.abs(p.x - def.x);
+      if (d < def.w / 2 + 1.5 && d < bestD) { bestD = d; bestEra = def.era; }
+    }
+    if (bestEra >= 0) frameEra(bestEra, true);
+  });
+
   // ---------- events ----------
   events.on('buy', ({ tier, auto, free }) => {
     const era = TIERS[tier].era;
