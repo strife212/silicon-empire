@@ -171,7 +171,7 @@ export function doClick() {
   events.emit('click', D.clickValue);
 }
 
-export function buyTier(i, qty = 1) {
+export function buyTier(i, qty = 1, opts = {}) {
   recompute();
   const g = D.growth;
   let n = qty === 'max' ? maxAffordable(i, G.owned[i], G.credits, g) : qty;
@@ -182,12 +182,12 @@ export function buyTier(i, qty = 1) {
     // try largest affordable chunk of the requested qty
     n = Math.min(n, maxAffordable(i, G.owned[i], G.credits, g));
     if (n <= 0) return 0;
-    return buyTier(i, n);
+    return buyTier(i, n, opts);
   }
   G.credits -= cost;
   G.owned[i] += n;
   updateSeen();
-  events.emit('buy', { tier: i, qty: n, owned: G.owned[i] });
+  events.emit('buy', { tier: i, qty: n, owned: G.owned[i], ...opts });
   return n;
 }
 
@@ -294,7 +294,7 @@ function autoBuyStep(dt) {
     const score = D.rate[t.id] / cost;
     if (score > bestScore) { bestScore = score; best = t.id; }
   }
-  if (best >= 0 && buyTier(best, 1) > 0) {
+  if (best >= 0 && buyTier(best, 1, { auto: true }) > 0) {
     events.emit('autobuy', { label: TIERS[best].name, key: 'tier:' + best });
   }
 }

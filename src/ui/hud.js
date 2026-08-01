@@ -123,21 +123,34 @@ function buildCard(i) {
   refs.buy.addEventListener('click', (e) => {
     e.stopPropagation();
     const n = buyTier(i, buyQty);
-    if (n > 0) refresh();
+    if (n > 0) updateAll();
   });
   root.addEventListener('click', () => { if (sceneAPI && G.owned[i] > 0) sceneAPI.flyToTier(i); });
   cards.set(i, refs);
   return root;
 }
 
+// Diff-based: existing card nodes are never recreated, so in-flight clicks
+// always land on a live element. Only adds/removes cards when the visible
+// tier set changes (discovery, prestige, import).
 function rebuildTierList() {
   const wrap = $('tiers');
-  wrap.innerHTML = '';
-  cards.clear();
-  for (const t of TIERS) {
-    if (G.seen[t.id] === 0) continue;
-    if (t.requiresPrestige && G.prestiges < 1) continue;
-    wrap.appendChild(buildCard(t.id));
+  const wanted = TIERS
+    .filter((t) => G.seen[t.id] > 0 && !(t.requiresPrestige && G.prestiges < 1))
+    .map((t) => t.id);
+  for (const [id, refs] of [...cards]) {
+    if (!wanted.includes(id)) { refs.root.remove(); cards.delete(id); }
+  }
+  let prev = null;
+  for (const id of wanted) {
+    let refs = cards.get(id);
+    if (!refs) {
+      const root = buildCard(id);
+      if (prev) prev.after(root);
+      else wrap.prepend(root);
+      refs = cards.get(id);
+    }
+    prev = refs.root;
   }
 }
 
@@ -177,8 +190,9 @@ function updateCards() {
     let qty = buyQty === 'max' ? Math.max(1, maxAffordable(i, G.owned[i], G.credits, g)) : buyQty;
     const cost = bulkCost(i, G.owned[i], qty, g);
     const afford = G.credits >= cost;
-    c.buy.disabled = !afford;
-    c.buy.textContent = `Buy ${buyQty === 'max' ? `Max (${afford ? qty : 0})` : '×' + qty} — ₵${fmt(cost)}`;
+    if (c.buy.disabled !== !afford) c.buy.disabled = !afford;
+    const buyTxt = `Buy ${buyQty === 'max' ? `Max (${afford ? qty : 0})` : '×' + qty} — ₵${fmt(cost)}`;
+    if (c.buy.textContent !== buyTxt) c.buy.textContent = buyTxt;
 
     // upgrades
     for (const u of UPGRADES) {
@@ -190,14 +204,18 @@ function updateCards() {
         btn.className = 'up-btn';
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
-          if (buyUpgrade(u.id)) { toast(`🔧 ${u.name} — ${t.short} ×${u.mult}`); refresh(); }
+          if (buyUpgrade(u.id)) { toast(`🔧 ${u.name} — ${t.short} ×${u.mult}`); updateAll(); }
         });
         c.ups.appendChild(btn);
         c.upBtns.set(u.id, btn);
       }
-      btn.textContent = `${u.name} ×${u.mult} — ₵${fmt(u.cost)}`;
-      btn.title = `Multiplies ${t.name} output by ${u.mult}`;
-      btn.disabled = G.credits < u.cost;
+      const upTxt = `${u.name} ×${u.mult} — ₵${fmt(u.cost)}`;
+      if (btn.textContent !== upTxt) {
+        btn.textContent = upTxt;
+        btn.title = `Multiplies ${t.name} output by ${u.mult}`;
+      }
+      const upDis = G.credits < u.cost;
+      if (btn.disabled !== upDis) btn.disabled = upDis;
     }
   }
 }
@@ -211,7 +229,7 @@ function buildInfra() {
   for (const item of INFRA) {
     const btn = document.createElement('button');
     btn.className = 'infra-btn';
-    btn.addEventListener('click', () => { if (buyInfra(item.id)) refresh(); });
+    btn.addEventListener('click', () => { if (buyInfra(item.id)) updateAll(); });
     wrap.appendChild(btn);
     infraBtns.set(item.id, btn);
   }
@@ -224,8 +242,10 @@ function updateInfra() {
     const btn = infraBtns.get(item.id);
     const n = G.infra[item.id] || 0;
     const cost = infraCost(item, n, infraGrowth(G.research));
-    btn.innerHTML = `<span>${item.icon} ${item.name} <b style="color:var(--blue)">×${n}</b> (+${item.cap} ${item.kind === 'power' ? 'kW' : 'cool'})</span><span>₵${fmt(cost)}</span>`;
-    btn.disabled = G.credits < cost;
+    const html = `<span>${item.icon} ${item.name} <b style="color:var(--blue)">×${n}</b> (+${item.cap} ${item.kind === 'power' ? 'kW' : 'cool'})</span><span>₵${fmt(cost)}</span>`;
+    if (btn.innerHTML !== html) btn.innerHTML = html;
+    const dis = G.credits < cost;
+    if (btn.disabled !== dis) btn.disabled = dis;
   }
   $('alloc-row').classList.toggle('hidden', !G.research.inf_alloc);
   $('autobuy-row').classList.toggle('hidden', !G.research.inf_ai);
@@ -244,7 +264,7 @@ function buildResearch() {
       node.id = 'res-' + r.id;
       node.innerHTML = `<div class="rn">${r.name}</div><div class="rd">${r.desc}</div><div class="rc"></div>`;
       node.addEventListener('click', () => {
-        if (buyResearch(r.id)) { toast(`🔬 Researched: ${r.name}`); refresh(); }
+        if (buyResearch(r.id)) { toast(`🔬 Researched: ${r.name}`); updateAll(); }
       });
       col.appendChild(node);
     }
@@ -260,7 +280,9 @@ function updateResearch() {
     node.classList.toggle('owned', owned);
     node.classList.toggle('locked', !owned && locked);
     node.classList.toggle('afford', !owned && !locked && G.rp >= r.cost);
-    node.querySelector('.rc').textContent = owned ? '✓ researched' : `${fmt(r.cost)} RP` + (locked ? ` · needs ${RESEARCH.find((x) => x.id === r.req).name}` : '');
+    const rcTxt = owned ? '✓ researched' : `${fmt(r.cost)} RP` + (locked ? ` · needs ${RESEARCH.find((x) => x.id === r.req).name}` : '');
+    const rc = node.querySelector('.rc');
+    if (rc.textContent !== rcTxt) rc.textContent = rcTxt;
   }
 }
 

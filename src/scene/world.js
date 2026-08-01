@@ -12,7 +12,7 @@ import { TIERS } from '../game/balance.js';
 import { ROOMS } from './rooms.js';
 import { mat, box, plate, screenTex, screenMat } from './helpers.js';
 import { rackFrame, museumShelf, desk } from './models.js';
-import { Placement } from './placement.js';
+import { Placement, CAPS } from './placement.js';
 import { updateFX, tween, finishTweens, easeInOut, setParticleScene, burst } from './fx.js';
 
 export function initWorld(container) {
@@ -220,12 +220,14 @@ export function initWorld(container) {
     return { target, pos };
   }
 
+  let flightsActive = 0;
   function flyTo(target, pos, dur = 1.4) {
     const t0 = controls.target.clone(), p0 = camera.position.clone();
+    flightsActive++;
     tween((k) => {
       controls.target.lerpVectors(t0, target, k);
       camera.position.lerpVectors(p0, pos, k);
-    }, dur, easeInOut);
+    }, dur, easeInOut, () => { flightsActive = Math.max(0, flightsActive - 1); });
   }
 
   function frameEra(era, animated = true) {
@@ -269,10 +271,31 @@ export function initWorld(container) {
   }
   fullResync(false);
 
+  // close-up on the newest machine of a tier (anchor-based, so it works
+  // even before the model finishes its pop-in animation)
+  function flyToTierClose(tier) {
+    if (flightsActive > 0) return; // don't restart the camera while a zoom is in flight
+    const anchors = placement.anchors[tier];
+    const idx = Math.max(0, Math.min(G.owned[tier], CAPS[tier], anchors.length) - 1);
+    const a = anchors[idx];
+    if (!a) return;
+    let ty, dist;
+    if (tier <= 1) { ty = a.y + 0.15; dist = 1.7; }          // bench & shelf machines
+    else if (tier <= 7) { ty = 0.95; dist = 2.6; }           // desk setups
+    else if (tier === 8) { ty = a.y + 0.05; dist = 2.2; }    // rack sled
+    else if (tier <= 10) { ty = 1.3; dist = 4.5; }           // racks & pods
+    else if (tier === 11) { ty = 1.4; dist = 8.5; }          // cryo row
+    else { ty = 1.8; dist = 6.5; }                           // chandelier
+    const target = new THREE.Vector3(a.x, ty, a.z);
+    const pos = target.clone().add(new THREE.Vector3(0.38 * dist, 0.34 * dist, 0.86 * dist));
+    flyTo(target, pos, 1.1);
+  }
+
   // ---------- events ----------
-  events.on('buy', ({ tier }) => {
+  events.on('buy', ({ tier, auto, free }) => {
     const era = TIERS[tier].era;
-    if (!revealed[era]) revealEra(era, true);
+    if (!revealed[era]) { revealEra(era, true); return; }
+    if (!auto && !free) flyToTierClose(tier);
   });
   events.on('prestige', () => {
     placement.clearAll();
