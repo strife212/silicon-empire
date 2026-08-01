@@ -1,7 +1,7 @@
 // Headless game state + logic. No DOM, no three.js — fully simulatable.
 import {
   TIERS, UPGRADES, INFRA, RESEARCH, MILESTONES,
-  PRESTIGE_UNLOCK, CHIP_MULT, chipsFor, rpRate, CLICK_CPS_FRACTION,
+  PRESTIGE_UNLOCK, CHIP_MULT, CHIP_MULT_VAULT, chipsFor, rpRate, CLICK_CPS_FRACTION,
   JOB_CPS_LIMIT, JOB_NAMES, SHARD_CHANCE_PER_ANNEX, INCIDENT_BASE_CHANCE,
   costGrowth, infraGrowth, bulkCost, maxAffordable, infraCost, milestoneMult,
 } from './balance.js';
@@ -63,7 +63,7 @@ export function recompute() {
   const R = G.research;
   D.growth = costGrowth(R);
 
-  const chipMult = R.inf_vault ? 0.03 : CHIP_MULT;
+  const chipMult = R.inf_vault ? CHIP_MULT_VAULT : CHIP_MULT;
   let global = 1 + chipMult * G.chips;
   if (R.hw1) global *= 1.10;
   if (R.hw3) global *= 1.25;

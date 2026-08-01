@@ -313,7 +313,8 @@ function updateTopbar() {
   }
 
   $('chips-stat').classList.toggle('hidden', G.chips === 0);
-  $('chips').textContent = fmt(G.chips) + ` (+${(G.chips * 2)}%)`;
+  const chipPct = G.research.inf_vault ? 8 : 5;
+  $('chips').textContent = fmt(G.chips) + ` (+${G.chips * chipPct}%)`;
 
   const showPrestige = G.lifetimeRun >= PRESTIGE_UNLOCK * 0.25 || G.prestiges > 0;
   $('prestige-btn').classList.toggle('hidden', !showPrestige);
@@ -347,7 +348,7 @@ function openPrestigeModal() {
     <h2>⟲ Sell the company, keep the patents</h2>
     <p>Reset your empire back to the garage. Your research and museum survive; everything else goes.</p>
     <p>${avail
-      ? `You will earn <b style="color:var(--amber)">${fmt(gain)} Vintage Chip${gain > 1 ? 's' : ''}</b> — each is a permanent +2% to all production.`
+      ? `You will earn <b style="color:var(--amber)">${fmt(gain)} Vintage Chip${gain > 1 ? 's' : ''}</b> — each is a permanent +${G.research.inf_vault ? 8 : 5}% to all production.`
       : `Requires <b>₵${fmt(PRESTIGE_UNLOCK)}</b> earned this run. Progress: ${Math.floor(100 * G.lifetimeRun / PRESTIGE_UNLOCK)}%`}</p>
     <p class="dim">Lifetime this run: ₵${fmt(G.lifetimeRun)} · Current chips: ${fmt(G.chips)}</p>
     <div class="btn-row">

@@ -14,9 +14,9 @@ export const TIERS = [
   { id: 7,  name: 'RGB Gaming Rig',      short: 'RGB Rig',   era: 3, baseCost: 3.3e8,  baseRate: 44000, icon: '🌈', power: 0 },
   { id: 8,  name: '1U Rack Server',      short: '1U Server', era: 4, baseCost: 5.1e9,  baseRate: 2.6e5, icon: '📀', power: 2 },
   { id: 9,  name: 'Server Rack (42U)',   short: '42U Rack',  era: 4, baseCost: 7.5e10, baseRate: 1.6e6, icon: '🗼', power: 12 },
-  { id: 10, name: 'GPU Compute Pod',     short: 'GPU Pod',   era: 5, baseCost: 1e12,   baseRate: 1e7,   icon: '🔥', power: 60 },
-  { id: 11, name: 'Cryo Supercomputer Row', short: 'Cryo Row', era: 5, baseCost: 1.4e13, baseRate: 6.5e7, icon: '❄️', power: 250 },
-  { id: 12, name: 'Quantum Annex',       short: 'Quantum',   era: 6, baseCost: 2e14,   baseRate: 4e8,   icon: '✨', power: 100, requiresPrestige: true },
+  { id: 10, name: 'GPU Compute Pod',     short: 'GPU Pod',   era: 5, baseCost: 1e12,   baseRate: 1.6e7, icon: '🔥', power: 60 },
+  { id: 11, name: 'Cryo Supercomputer Row', short: 'Cryo Row', era: 5, baseCost: 1.4e13, baseRate: 1.2e8, icon: '❄️', power: 250 },
+  { id: 12, name: 'Quantum Annex',       short: 'Quantum',   era: 6, baseCost: 2e14,   baseRate: 9e8,   icon: '✨', power: 100, requiresPrestige: true },
 ];
 
 export const ERAS = [
@@ -128,7 +128,7 @@ export const RESEARCH = [
   { id: 'inf_leg',  branch: 'inf', name: 'Legacy Emulation',        cost: 80000,  desc: '+5% production per museum relic', req: 'inf5' },
   { id: 'inf8',     branch: 'inf', name: 'Self-Healing Fabric',     cost: 150000, desc: 'Offline machines auto-reboot after 30s', req: 'inf_leg' },
   { id: 'inf9',     branch: 'inf', name: 'Procurement AI v2',       cost: 200000, desc: 'Auto-buyer acts 4× faster', req: 'inf8' },
-  { id: 'inf_vault', branch: 'inf', name: 'Patent Vault',           cost: 500000, desc: 'Vintage Chips give +3% each (was +2%)', req: 'inf9' },
+  { id: 'inf_vault', branch: 'inf', name: 'Patent Vault',           cost: 500000, desc: 'Vintage Chips give +8% each (was +5%)', req: 'inf9' },
   { id: 'inf10',    branch: 'inf', name: 'Dyson Feed',              cost: 800000, desc: '-50% power draw', req: 'inf_vault' },
   { id: 'inf_foundry', branch: 'inf', name: 'Chip Foundry',         cost: 1.5e6,  desc: '+15% Vintage Chips on prestige', req: 'inf10' },
 ];
@@ -137,7 +137,8 @@ export const BRANCH_NAMES = { hw: 'Hardware', sw: 'Software', inf: 'Infrastructu
 
 // Prestige
 export const PRESTIGE_UNLOCK = 1e12;           // lifetime-this-run credits needed
-export const CHIP_MULT = 0.02;                 // +2% production per Vintage Chip
+export const CHIP_MULT = 0.05;                 // +5% production per Vintage Chip
+export const CHIP_MULT_VAULT = 0.08;           // with Patent Vault research
 export const chipsFor = (lifetimeRun) => Math.floor(Math.sqrt(lifetimeRun / PRESTIGE_UNLOCK));
 
 // RP generation: rate per second from number of distinct tiers owned
