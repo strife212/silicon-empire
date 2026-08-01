@@ -4,7 +4,7 @@ import {
   doClick, buyTier, buyUpgrade, buyResearch, buyInfra,
   claimJob, rebootAll, doPrestige, prestigeGain, prestigeAvailable,
 } from '../game/state.js';
-import { TIERS, ERAS, UPGRADES, RESEARCH, BRANCH_NAMES, INFRA, infraCost, bulkCost, maxAffordable, MILESTONES, PRESTIGE_UNLOCK } from '../game/balance.js';
+import { TIERS, ERAS, UPGRADES, RESEARCH, BRANCH_NAMES, INFRA, infraCost, infraGrowth, bulkCost, maxAffordable, MILESTONES, extraMilestones, PRESTIGE_UNLOCK } from '../game/balance.js';
 import { exportSave, importSave, hardReset, save } from '../game/save.js';
 
 const $ = (id) => document.getElementById(id);
@@ -141,9 +141,11 @@ function rebuildTierList() {
   }
 }
 
+function allMilestones() {
+  return [...extraMilestones(G.research), ...MILESTONES].sort((a, b) => a - b);
+}
 function nextMilestone(owned) {
-  if (G.research.hw_mini && owned < 5) return 5;
-  for (const m of MILESTONES) if (owned < m) return m;
+  for (const m of allMilestones()) if (owned < m) return m;
   return null;
 }
 
@@ -221,7 +223,7 @@ function updateInfra() {
   for (const item of INFRA) {
     const btn = infraBtns.get(item.id);
     const n = G.infra[item.id] || 0;
-    const cost = infraCost(item, n);
+    const cost = infraCost(item, n, infraGrowth(G.research));
     btn.innerHTML = `<span>${item.icon} ${item.name} <b style="color:var(--blue)">×${n}</b> (+${item.cap} ${item.kind === 'power' ? 'kW' : 'cool'})</span><span>₵${fmt(cost)}</span>`;
     btn.disabled = G.credits < cost;
   }
@@ -474,8 +476,7 @@ export function initHUD() {
   events.on('loaded', () => refresh());
   events.on('buy', ({ tier, owned }) => {
     // milestone celebration
-    const th = G.research.hw_mini ? [5, ...MILESTONES] : MILESTONES;
-    if (th.includes(owned)) toast(`🏆 ${owned}× ${TIERS[tier].short} — output doubled!`);
+    if (allMilestones().includes(owned)) toast(`🏆 ${owned}× ${TIERS[tier].short} — output doubled!`);
   });
 
   // sync autobuy checkbox with save

@@ -54,6 +54,7 @@ export function load() {
     let rate = 0.5;
     if (s.research.sw3) rate = 0.75;
     if (s.research.sw5) rate = 1.0;
+    if (s.research.sw10) rate *= 1.5;
     offlineEarned = D.cps * secs * rate;
     if (offlineEarned > 0) earn(offlineEarned);
     s.rp += D.rps * secs * rate;

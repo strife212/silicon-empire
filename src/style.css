@@ -281,7 +281,13 @@ html, body {
   background-image: var(--scanlines);
   backdrop-filter: blur(3px);
   border-left: 1px solid var(--panel-border);
-  overflow-y: auto; padding: 14px;
+  overflow-y: auto; padding: 0 14px 40px;
+}
+#research-panel .panel-head {
+  position: sticky; top: 0; z-index: 2;
+  margin: 0 -14px 9px; padding: 14px 14px 10px;
+  background: var(--panel-solid);
+  border-bottom: 1px solid var(--panel-border);
 }
 #research-close {
   margin-left: auto; background: none; border: 1px solid transparent;

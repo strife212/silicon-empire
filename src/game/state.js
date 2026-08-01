@@ -3,7 +3,7 @@ import {
   TIERS, UPGRADES, INFRA, RESEARCH, MILESTONES,
   PRESTIGE_UNLOCK, CHIP_MULT, chipsFor, rpRate, CLICK_CPS_FRACTION,
   JOB_CPS_LIMIT, JOB_NAMES, SHARD_CHANCE_PER_ANNEX, INCIDENT_BASE_CHANCE,
-  costGrowth, bulkCost, maxAffordable, infraCost, milestoneMult,
+  costGrowth, infraGrowth, bulkCost, maxAffordable, infraCost, milestoneMult,
 } from './balance.js';
 
 // ---------- events ----------
@@ -63,10 +63,19 @@ export function recompute() {
   const R = G.research;
   D.growth = costGrowth(R);
 
-  let global = 1 + CHIP_MULT * G.chips;
+  const chipMult = R.inf_vault ? 0.03 : CHIP_MULT;
+  let global = 1 + chipMult * G.chips;
   if (R.hw1) global *= 1.10;
   if (R.hw3) global *= 1.25;
   if (R.hw6) global *= 1.50;
+  if (R.hw7) global *= 1.75;
+  if (R.hw8) global *= 2;
+  if (R.hw10) global *= 2.5;
+  if (R.inf_leg) global *= 1 + 0.05 * G.museum.length;
+  if (R.hw_vert) {
+    const totalOwned = G.owned.reduce((a, b) => a + b, 0);
+    global *= 1 + Math.min(2, totalOwned * 0.001);
+  }
   if (G.alloc > 0 && R.inf_alloc) global *= (1 - G.alloc);
 
   // power & heat
@@ -79,9 +88,13 @@ export function recompute() {
   let powerEff = 1;
   if (R.inf1) powerEff *= 0.85;
   if (R.inf3) powerEff *= 0.75;
+  if (R.inf5) powerEff *= 0.6;
+  if (R.inf10) powerEff *= 0.5;
   let powerUse = 0;
   for (const t of TIERS) powerUse += (G.owned[t.id] - G.offline[t.id]) * t.power * powerEff;
-  let heatEff = R.inf2 ? 0.85 : 1;
+  let heatEff = 1;
+  if (R.inf2) heatEff *= 0.85;
+  if (R.inf4) heatEff *= 0.75;
   const heatLoad = powerUse * heatEff;
 
   D.powerUse = powerUse; D.powerCap = powerCap;
@@ -91,15 +104,20 @@ export function recompute() {
   if (D.throttled) global *= 0.5;
 
   // per-tier multipliers
+  const adjCap = R.sw8 ? 2 : 1;
   let cps = 0;
   for (const t of TIERS) {
     const i = t.id;
-    let m = milestoneMult(G.owned[i], !!R.hw_mini);
+    let m = milestoneMult(G.owned[i], R);
     for (const u of UPGRADES) if (u.tier === i && G.upgrades[u.id]) m *= u.mult;
     if (R.sw_net) {
       const adj = (i > 0 ? G.owned[i - 1] : 0) + (i < TIERS.length - 1 ? G.owned[i + 1] : 0);
-      m *= 1 + Math.min(1, adj * 0.01);
+      m *= 1 + Math.min(adjCap, adj * 0.01);
     }
+    if (R.hw_retro && t.era <= 1) m *= 3;
+    if (R.hw_office && (t.era === 2 || t.era === 3)) m *= 3;
+    if (R.hw_hyper && (t.era === 4 || t.era === 5)) m *= 3;
+    if (R.hw_q && i === 12) m *= 3;
     m *= global;
     D.mult[i] = m;
     D.rate[i] = t.baseRate * m;
@@ -110,12 +128,17 @@ export function recompute() {
   // research points
   const distinct = G.owned.filter((n) => n > 0).length;
   let rps = rpRate(distinct);
+  if (R.sw_rp1) rps *= 1.25;
+  if (R.sw_rp2) rps *= 1.5;
+  if (R.sw_rp3) rps *= 2;
+  if (R.sw_rp4) rps *= 3;
   if (G.alloc > 0 && R.inf_alloc) rps *= 1 + 3 * G.alloc;
   D.rps = distinct >= 2 ? rps : 0; // RP starts once you own two distinct machines
 
   // clicking
   let cv = Math.max(1, cps * CLICK_CPS_FRACTION);
   if (R.sw1) cv *= 5;
+  if (R.sw6) cv *= 5;
   D.clickValue = cv;
 
   return D;
@@ -190,7 +213,7 @@ export function buyResearch(id) {
 export function buyInfra(id) {
   const item = INFRA.find((x) => x.id === id);
   if (!item) return false;
-  const cost = infraCost(item, G.infra[id] || 0);
+  const cost = infraCost(item, G.infra[id] || 0, infraGrowth(G.research));
   if (G.credits < cost) return false;
   G.credits -= cost;
   G.infra[id] = (G.infra[id] || 0) + 1;
@@ -213,7 +236,10 @@ export function rebootAll() {
   if (n > 0) events.emit('reboot', n);
 }
 
-export function prestigeGain() { return chipsFor(G.lifetimeRun); }
+export function prestigeGain() {
+  const bonus = G.research.inf_foundry ? 1.15 : 1;
+  return Math.floor(chipsFor(G.lifetimeRun) * bonus);
+}
 export function prestigeAvailable() { return G.lifetimeRun >= PRESTIGE_UNLOCK; }
 
 export function doPrestige() {
@@ -243,14 +269,14 @@ function autoBuyStep(dt) {
   if (!G.autoBuy || !G.research.inf_ai) return;
   autoBuyTimer -= dt;
   if (autoBuyTimer > 0) return;
-  autoBuyTimer = 2;
+  autoBuyTimer = G.research.inf9 ? 0.5 : 2;
   // fix power/cooling first
   if (D.throttled || D.overheating) {
     const kind = D.throttled ? 'power' : 'cool';
     let best = null, bestScore = 0;
     for (const item of INFRA) {
       if (item.kind !== kind) continue;
-      const cost = infraCost(item, G.infra[item.id] || 0);
+      const cost = infraCost(item, G.infra[item.id] || 0, infraGrowth(G.research));
       if (cost <= G.credits && item.cap / cost > bestScore) { best = item; bestScore = item.cap / cost; }
     }
     if (best && buyInfra(best.id)) {
@@ -289,6 +315,7 @@ function jobStep(dt) {
   if (G.jobTimer <= 0) {
     let reward = Math.max(50, D.cps * 25, D.clickValue * 30);
     if (G.research.sw2) reward *= 2;
+    if (G.research.sw7) reward *= 3;
     reward = Math.round(reward);
     G.job = {
       name: JOB_NAMES[Math.floor(Math.random() * JOB_NAMES.length)],
@@ -300,20 +327,30 @@ function jobStep(dt) {
 }
 
 // ---------- heat incidents & quantum shards ----------
+let autoRebootTimer = 0;
 function hazardStep(dt) {
   if (D.overheating && D.coolCap >= 0) {
     const ratio = D.heatLoad / Math.max(1, D.coolCap);
-    const p = Math.min(0.05, INCIDENT_BASE_CHANCE * (ratio - 1)) * dt;
+    let p = Math.min(0.05, INCIDENT_BASE_CHANCE * (ratio - 1)) * dt;
+    if (G.research.inf7) p *= 0.5;
     if (Math.random() < p) {
-      // knock out ~10% of a random powered tier
+      // knock out ~10% of a random powered tier (5% with Redundant Arrays)
       const candidates = TIERS.filter((t) => t.power > 0 && G.owned[t.id] - G.offline[t.id] > 0);
       if (candidates.length) {
         const t = candidates[Math.floor(Math.random() * candidates.length)];
-        const hit = Math.max(1, Math.ceil(G.owned[t.id] * 0.1));
+        const frac = G.research.inf7 ? 0.05 : 0.1;
+        const hit = Math.max(1, Math.ceil(G.owned[t.id] * frac));
         G.offline[t.id] = Math.min(G.owned[t.id], G.offline[t.id] + hit);
         events.emit('incident', { tier: t.id, count: hit });
       }
     }
+  }
+  // Self-Healing Fabric: offline machines come back on their own
+  if (G.research.inf8 && G.offline.some((n) => n > 0)) {
+    autoRebootTimer += dt;
+    if (autoRebootTimer >= 30) { autoRebootTimer = 0; rebootAll(); }
+  } else {
+    autoRebootTimer = 0;
   }
   // probability shards
   const annexes = G.owned[12] - G.offline[12];
@@ -333,7 +370,7 @@ export function tick(dt) {
   recompute();
   earn(D.cps * dt);
   G.rp += D.rps * dt;
-  if (G.research.sw_auto) earn(D.clickValue * 2 * dt);
+  if (G.research.sw_auto) earn(D.clickValue * (G.research.sw9 ? 10 : 2) * dt);
   jobStep(dt);
   hazardStep(dt);
   autoBuyStep(dt);
