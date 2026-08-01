@@ -44,6 +44,8 @@ export function initWorld(container) {
   controls.minDistance = 2;
   controls.maxDistance = 70;
   controls.maxPolarAngle = 1.48;
+  controls.autoRotateSpeed = 0.55; // gentle orbit once a zoom lands
+  controls.addEventListener('start', () => { controls.autoRotate = false; }); // user takes over
 
   // ---------- lights ----------
   scene.add(new THREE.AmbientLight(0x8090a8, 0.5));
@@ -221,19 +223,28 @@ export function initWorld(container) {
   }
 
   let flightsActive = 0;
-  function flyTo(target, pos, dur = 1.4) {
+  function flyTo(target, pos, dur = 1.4, onDone = null) {
+    controls.autoRotate = false; // any new flight cancels the gentle spin
     const t0 = controls.target.clone(), p0 = camera.position.clone();
     flightsActive++;
     tween((k) => {
       controls.target.lerpVectors(t0, target, k);
       camera.position.lerpVectors(p0, pos, k);
-    }, dur, easeInOut, () => { flightsActive = Math.max(0, flightsActive - 1); });
+    }, dur, easeInOut, () => {
+      flightsActive = Math.max(0, flightsActive - 1);
+      onDone?.();
+    });
   }
 
   function frameEra(era, animated = true) {
     const { target, pos } = roomView(era);
     if (animated) flyTo(target, pos);
-    else { finishTweens(); controls.target.copy(target); camera.position.copy(pos); }
+    else {
+      finishTweens();
+      controls.autoRotate = false;
+      controls.target.copy(target);
+      camera.position.copy(pos);
+    }
   }
 
   // ---------- era reveal ----------
@@ -287,8 +298,15 @@ export function initWorld(container) {
     else if (tier === 11) { ty = 1.4; dist = 8.5; }          // cryo row
     else { ty = 1.8; dist = 6.5; }                           // chandelier
     const target = new THREE.Vector3(a.x, ty, a.z);
-    const pos = target.clone().add(new THREE.Vector3(0.38 * dist, 0.34 * dist, 0.86 * dist));
-    flyTo(target, pos, 1.1);
+    // approach from the machine's front (anchors on walls face into the room)
+    const ry = a.ry || 0;
+    const front = new THREE.Vector3(Math.sin(ry), 0, Math.cos(ry));
+    const right = new THREE.Vector3(front.z, 0, -front.x);
+    const pos = target.clone()
+      .addScaledVector(front, 0.86 * dist)
+      .addScaledVector(right, 0.38 * dist)
+      .add(new THREE.Vector3(0, 0.34 * dist, 0));
+    flyTo(target, pos, 1.1, () => { controls.autoRotate = true; });
   }
 
   // ---------- events ----------
@@ -372,7 +390,7 @@ export function initWorld(container) {
       if (!focus) return;
       const dist = i >= 10 ? 11 : i >= 8 ? 7 : 3.2;
       const pos = focus.clone().add(new THREE.Vector3(dist * 0.35, dist * 0.55, dist * 0.9));
-      flyTo(focus, pos, 1.2);
+      flyTo(focus, pos, 1.2, () => { controls.autoRotate = true; });
     },
     setBloom(b) { bloom.enabled = b; },
     frameEra,
