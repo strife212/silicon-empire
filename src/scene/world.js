@@ -13,7 +13,8 @@ import { ROOMS } from './rooms.js';
 import { mat, box, plate, screenTex, screenMat } from './helpers.js';
 import { rackFrame, museumShelf, desk } from './models.js';
 import { Placement, CAPS } from './placement.js';
-import { updateFX, tween, finishTweens, easeInOut, setParticleScene, burst } from './fx.js';
+import { buildOutsideZones } from './outside.js';
+import { updateFX, tween, finishTweens, easeInOut, setParticleScene, burst, registerSpins } from './fx.js';
 
 export function initWorld(container) {
   // ---------- renderer ----------
@@ -26,7 +27,7 @@ export function initWorld(container) {
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x030706);
-  scene.fog = new THREE.Fog(0x030706, 16, 85);
+  scene.fog = new THREE.Fog(0x030706, 16, 105);
 
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
@@ -201,6 +202,10 @@ export function initWorld(container) {
     roomGroups[def.era] = g;
   }
 
+  // ---------- outside zones (revealed with their rooms) ----------
+  const outsideGroups = buildOutsideZones(scene);
+  for (const g of outsideGroups) registerSpins(g);
+
   // ---------- placement ----------
   const placement = new Placement(scene);
   setParticleScene(scene);
@@ -246,10 +251,17 @@ export function initWorld(container) {
     if (revealed[era]) return;
     revealed[era] = true;
     const g = roomGroups[era];
+    const out = outsideGroups[era];
     g.visible = true;
+    out.visible = true;
     if (!animated) { return; }
     g.scale.set(1, 0.01, 1);
-    tween((k) => { g.scale.y = Math.max(0.01, k); }, 0.9, easeInOut);
+    out.scale.set(1, 0.01, 1);
+    tween((k) => {
+      const s = Math.max(0.01, k);
+      g.scale.y = s;
+      out.scale.y = s;
+    }, 0.9, easeInOut);
     const r = ROOMS[era];
     burst(new THREE.Vector3(r.x, 1.2, 0), 0xffffff, 40, 0.08, 2.2);
     frameEra(era);
@@ -265,7 +277,13 @@ export function initWorld(container) {
   // reveal everything already reached by the save, place existing machines instantly
   function fullResync(animatedCamera = false) {
     placement.clearAll();
-    for (const r of ROOMS) { revealed[r.era] = false; roomGroups[r.era].visible = false; roomGroups[r.era].scale.set(1, 1, 1); }
+    for (const r of ROOMS) {
+      revealed[r.era] = false;
+      roomGroups[r.era].visible = false;
+      roomGroups[r.era].scale.set(1, 1, 1);
+      outsideGroups[r.era].visible = false;
+      outsideGroups[r.era].scale.set(1, 1, 1);
+    }
     const top = maxOwnedEra();
     for (let e = 0; e <= top; e++) revealEra(e, false);
     for (let i = 0; i < 40; i++) placement.sync(G.owned, false); // burst-place without animation
@@ -336,7 +354,11 @@ export function initWorld(container) {
   });
   events.on('prestige', () => {
     placement.clearAll();
-    for (const r of ROOMS) if (r.era > 0) { revealed[r.era] = false; roomGroups[r.era].visible = false; }
+    for (const r of ROOMS) if (r.era > 0) {
+      revealed[r.era] = false;
+      roomGroups[r.era].visible = false;
+      outsideGroups[r.era].visible = false;
+    }
     placement.syncMuseum(G.museum);
     frameEra(0, true);
   });
