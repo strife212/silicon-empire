@@ -353,12 +353,18 @@ function updateTopbar() {
     $('heat-stat').classList.toggle('warn', D.overheating);
   }
 
-  $('chips-stat').classList.toggle('hidden', G.chips === 0);
-  const chipPct = G.research.inf_vault ? 8 : 5;
-  $('chips').textContent = fmt(G.chips) + ` (+${G.chips * chipPct}%)`;
-
-  $('prevrun-stat').classList.toggle('hidden', !(G.lastRunIncome > 0));
-  if (G.lastRunIncome > 0) $('prevrun').textContent = '₵' + fmt(G.lastRunIncome) + '/s';
+  // legacy line under the era title: chips + previous run record
+  const legacy = $('legacy-line');
+  const showLegacy = G.chips > 0 || G.lastRunIncome > 0;
+  legacy.classList.toggle('hidden', !showLegacy);
+  if (showLegacy) {
+    const chipPct = G.research.inf_vault ? 8 : 5;
+    const parts = [];
+    if (G.chips > 0) parts.push(`⟲ <b>${fmt(G.chips)}</b> chips (+${G.chips * chipPct}%)`);
+    if (G.lastRunIncome > 0) parts.push(`prev run record <i>₵${fmt(G.lastRunIncome)}/s</i>`);
+    const html = parts.join(' · ');
+    if (legacy.innerHTML !== html) legacy.innerHTML = html;
+  }
 
   const showPrestige = G.lifetimeRun >= PRESTIGE_UNLOCK * 0.25 || G.prestiges > 0;
   $('prestige-btn').classList.toggle('hidden', !showPrestige);

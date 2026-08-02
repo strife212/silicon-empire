@@ -164,6 +164,15 @@ html, body {
 }
 @keyframes cursor-blink { 50% { opacity: 0; } }
 
+#legacy-line {
+  margin-top: 4px;
+  font-size: 10.5px;
+  color: var(--dim);
+  letter-spacing: 0.05em;
+}
+#legacy-line b { color: var(--amber); font-weight: 600; }
+#legacy-line i { color: var(--cyan); font-style: normal; }
+
 #qty-row {
   display: flex; align-items: center; gap: 6px;
   margin: 10px 0 12px;
