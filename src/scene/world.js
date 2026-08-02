@@ -22,12 +22,12 @@ export function initWorld(container) {
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(1.75, window.devicePixelRatio));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.15;
+  renderer.toneMappingExposure = 1.28;
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x030706);
-  scene.fog = new THREE.Fog(0x05090a, 30, 230);
+  scene.fog = new THREE.Fog(0x0b1512, 45, 420); // gentle haze; the whole strip stays readable at max zoom
 
   // ---------- sky: gradient dome, stars, moon ----------
   const sky = new THREE.Mesh(
@@ -37,9 +37,9 @@ export function initWorld(container) {
       vertexShader: 'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
       fragmentShader: `varying vec3 vP;
         void main(){
-          float h = clamp(normalize(vP).y * 2.4, 0.0, 1.0);
-          vec3 hor = vec3(0.030, 0.062, 0.052);   // phosphor city-glow horizon
-          vec3 zen = vec3(0.004, 0.007, 0.011);
+          float h = clamp(normalize(vP).y * 2.0, 0.0, 1.0);
+          vec3 hor = vec3(0.058, 0.110, 0.088);   // phosphor city-glow horizon
+          vec3 zen = vec3(0.006, 0.010, 0.016);
           gl_FragColor = vec4(mix(hor, zen, h), 1.0);
         }`,
     })
@@ -88,11 +88,11 @@ export function initWorld(container) {
   controls.addEventListener('start', () => { controls.autoRotate = false; }); // user takes over
 
   // ---------- lights ----------
-  scene.add(new THREE.AmbientLight(0x8090a8, 0.55));
-  const hemi = new THREE.HemisphereLight(0xbcc7d6, 0x2a2620, 0.55);
+  scene.add(new THREE.AmbientLight(0x8fa0b8, 0.7));
+  const hemi = new THREE.HemisphereLight(0xb8ccd8, 0x3a4238, 0.95);
   scene.add(hemi);
   // cool moonlight so distant geometry keeps its shape
-  const moonLight = new THREE.DirectionalLight(0x8fa8d8, 0.4);
+  const moonLight = new THREE.DirectionalLight(0x9fb4dc, 0.75);
   moonLight.position.set(-60, 90, 50);
   scene.add(moonLight);
 
