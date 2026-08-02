@@ -152,8 +152,7 @@ export function initWorld(container) {
 
   let fogPlanes = [];
   function propDatacenter(g, def) {
-    // ceiling with light strips
-    box(g, def.w, 0.1, def.d, mat(0x11151a, { rough: 0.9 }), 0, WALL_H + 0.05, 0);
+    // floating light strips (no ceiling — every room stays open-top)
     for (let i = 0; i < 5; i++) {
       const strip = plate(g, def.w * 0.85, 0.18, mat(0xbfe0ff, { emissive: 0xbfe0ff, eInt: 0.9 }), 0, WALL_H - 0.02, -def.d / 2 + 2 + i * 3.6);
       strip.rotation.x = Math.PI / 2; // faces down; invisible edge-on
@@ -210,13 +209,6 @@ export function initWorld(container) {
   function roomView(era) {
     const r = ROOMS[era];
     const m = Math.max(r.w, r.d);
-    if (era === 5) {
-      // datacenter has a ceiling — view from inside the hall, down the aisles
-      return {
-        target: new THREE.Vector3(r.x + 1, 1.2, -3),
-        pos: new THREE.Vector3(r.x - r.w * 0.34, 2.8, r.d / 2 + 5),
-      };
-    }
     const target = new THREE.Vector3(r.x, 1.0, 0.3);
     const pos = new THREE.Vector3(r.x - m * 0.12, m * 0.5 + 1.2, m * 0.8 + 2.5);
     return { target, pos };
