@@ -30,6 +30,7 @@ export function defaultState() {
     chips: 0,
     prestiges: 0,
     museum: [],         // per prestige: highest tier index reached
+    lastRunIncome: 0,   // cps at last prestige, normalized to full income allocation
     seen: Array(TIERS.length).fill(0), // 0 hidden, 1 silhouette, 2 revealed (sticky)
     autoBuy: false,
     clicks: 0,
@@ -248,6 +249,13 @@ export function doPrestige() {
   let maxTier = 0;
   for (let i = 0; i < TIERS.length; i++) if (G.owned[i] > 0) maxTier = i;
   G.museum.push(maxTier);
+  // record this run's income at full income allocation, everything online
+  const savedAlloc = G.alloc;
+  G.alloc = 0;
+  G.offline = Array(TIERS.length).fill(0);
+  recompute();
+  G.lastRunIncome = D.cps;
+  G.alloc = savedAlloc;
   G.chips += gain;
   G.prestiges++;
   G.credits = 0;

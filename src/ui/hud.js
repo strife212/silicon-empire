@@ -309,6 +309,25 @@ function updateIncident() {
   $('incident-text').textContent = `⚠ Overheating! ${total} machine${total > 1 ? 's' : ''} offline`;
 }
 
+// ---------- room navigator (bottom-left of viewport) ----------
+let roomNavSig = '';
+function updateRoomNav() {
+  const unlocked = new Set([0]);
+  for (const t of TIERS) if (G.owned[t.id] > 0) unlocked.add(t.era);
+  const eras = [...unlocked].sort((a, b) => a - b);
+  const sig = eras.join(',');
+  if (sig === roomNavSig) return;
+  roomNavSig = sig;
+  const wrap = $('room-nav');
+  wrap.innerHTML = '';
+  for (const era of eras) {
+    const btn = document.createElement('button');
+    btn.innerHTML = `<span class="rn-num">0${era + 1}</span>${ERAS[era].name}`;
+    btn.addEventListener('click', () => sceneAPI?.frameEra(era, true));
+    wrap.appendChild(btn);
+  }
+}
+
 // ---------- top bar ----------
 function updateTopbar() {
   $('credits').textContent = '₵' + fmt(G.credits);
@@ -337,6 +356,9 @@ function updateTopbar() {
   $('chips-stat').classList.toggle('hidden', G.chips === 0);
   const chipPct = G.research.inf_vault ? 8 : 5;
   $('chips').textContent = fmt(G.chips) + ` (+${G.chips * chipPct}%)`;
+
+  $('prevrun-stat').classList.toggle('hidden', !(G.lastRunIncome > 0));
+  if (G.lastRunIncome > 0) $('prevrun').textContent = '₵' + fmt(G.lastRunIncome) + '/s';
 
   const showPrestige = G.lifetimeRun >= PRESTIGE_UNLOCK * 0.25 || G.prestiges > 0;
   $('prestige-btn').classList.toggle('hidden', !showPrestige);
@@ -373,6 +395,7 @@ function openPrestigeModal() {
       ? `You will earn <b style="color:var(--amber)">${fmt(gain)} Vintage Chip${gain > 1 ? 's' : ''}</b> — each is a permanent +${G.research.inf_vault ? 8 : 5}% to all production.`
       : `Requires <b>₵${fmt(PRESTIGE_UNLOCK)}</b> earned this run. Progress: ${Math.floor(100 * G.lifetimeRun / PRESTIGE_UNLOCK)}%`}</p>
     <p class="dim">Lifetime this run: ₵${fmt(G.lifetimeRun)} · Current chips: ${fmt(G.chips)}</p>
+    ${G.lastRunIncome > 0 ? `<p class="dim">Previous run record income: ₵${fmt(G.lastRunIncome)}/s</p>` : ''}
     <div class="btn-row">
       ${avail ? '<button class="primary" id="m-prestige">Sell &amp; restart</button>' : ''}
       <button id="m-cancel">Not yet</button>
@@ -433,6 +456,7 @@ export function refresh() {
 function updateAll() {
   recompute();
   updateTopbar();
+  updateRoomNav();
   updateCards();
   updateInfra();
   updateResearch();
