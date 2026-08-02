@@ -82,7 +82,7 @@ export function initWorld(container) {
   controls.enablePan = true;
   controls.panSpeed = 0.6;
   controls.minDistance = 2;
-  controls.maxDistance = 160;
+  controls.maxDistance = 80;
   controls.maxPolarAngle = 1.48;
   controls.autoRotateSpeed = 0.55; // gentle orbit once a zoom lands
   controls.addEventListener('start', () => { controls.autoRotate = false; }); // user takes over
