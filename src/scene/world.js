@@ -13,7 +13,7 @@ import { ROOMS } from './rooms.js';
 import { mat, box, plate, screenTex, screenMat } from './helpers.js';
 import { rackFrame, museumShelf, desk } from './models.js';
 import { Placement, CAPS } from './placement.js';
-import { buildOutsideZones, buildBackdrop } from './outside.js';
+import { buildOutdoorWorlds, buildBackdrop } from './outside.js';
 import { updateFX, tween, finishTweens, easeInOut, setParticleScene, burst, registerSpins } from './fx.js';
 
 export function initWorld(container) {
@@ -245,13 +245,25 @@ export function initWorld(container) {
     roomGroups[def.era] = g;
   }
 
-  // ---------- outside zones (revealed with their rooms) ----------
-  const outsideGroups = buildOutsideZones(scene);
-  for (const g of outsideGroups) registerSpins(g);
+  // ---------- outdoor worlds (the whole outdoors matches the latest era) ----------
+  const outdoorWorlds = buildOutdoorWorlds(scene);
+  for (const g of outdoorWorlds) registerSpins(g);
   const backdrop = buildBackdrop(scene);
 
+  let outdoorEra = -1;
+  function showOutdoor(era, animated = false) {
+    if (era === outdoorEra) return;
+    outdoorEra = era;
+    outdoorWorlds.forEach((g, i) => { g.visible = i === era; g.scale.set(1, 1, 1); });
+    if (animated) {
+      const g = outdoorWorlds[era];
+      g.scale.set(1, 0.01, 1);
+      tween((k) => { g.scale.y = Math.max(0.01, k); }, 0.9, easeInOut);
+    }
+  }
+
   // static geometry never moves — freeze matrices to skip per-frame updates
-  for (const grp of [...roomGroups, ...outsideGroups, backdrop]) {
+  for (const grp of [...roomGroups, ...outdoorWorlds, backdrop]) {
     grp.traverse((o) => { if (o.isMesh) { o.updateMatrix(); o.matrixAutoUpdate = false; } });
   }
 
@@ -300,17 +312,11 @@ export function initWorld(container) {
     if (revealed[era]) return;
     revealed[era] = true;
     const g = roomGroups[era];
-    const out = outsideGroups[era];
     g.visible = true;
-    out.visible = true;
+    showOutdoor(era, animated);
     if (!animated) { return; }
     g.scale.set(1, 0.01, 1);
-    out.scale.set(1, 0.01, 1);
-    tween((k) => {
-      const s = Math.max(0.01, k);
-      g.scale.y = s;
-      out.scale.y = s;
-    }, 0.9, easeInOut);
+    tween((k) => { g.scale.y = Math.max(0.01, k); }, 0.9, easeInOut);
     const r = ROOMS[era];
     burst(new THREE.Vector3(r.x, 1.2, 0), 0xffffff, 40, 0.08, 2.2);
     frameEra(era);
@@ -330,9 +336,8 @@ export function initWorld(container) {
       revealed[r.era] = false;
       roomGroups[r.era].visible = false;
       roomGroups[r.era].scale.set(1, 1, 1);
-      outsideGroups[r.era].visible = false;
-      outsideGroups[r.era].scale.set(1, 1, 1);
     }
+    outdoorEra = -1;
     const top = maxOwnedEra();
     for (let e = 0; e <= top; e++) revealEra(e, false);
     for (let i = 0; i < 40; i++) placement.sync(G.owned, false); // burst-place without animation
@@ -406,8 +411,8 @@ export function initWorld(container) {
     for (const r of ROOMS) if (r.era > 0) {
       revealed[r.era] = false;
       roomGroups[r.era].visible = false;
-      outsideGroups[r.era].visible = false;
     }
+    showOutdoor(0, false);
     placement.syncMuseum(G.museum);
     frameEra(0, true);
   });

@@ -1,12 +1,12 @@
-// The world outside the rooms: one zone per era, revealed with its room.
-// Zones line up along x and share a continuous road at z = ROAD_Z.
+// The world outside the rooms. One full-landscape variant per era —
+// the ENTIRE outdoors evolves to match the latest era you've reached.
 import * as THREE from 'three';
-import { ROOMS } from './rooms.js';
 import { mat, box, cyl, plate, B, screenTex, screenMat, blinkMat, sphereGeo } from './helpers.js';
 
 const ROAD_Z = 12;
 const ROAD_W = 3.4;
-const GROUND_DEPTH = 100; // z from -50 to +50
+const STRIP_X0 = -35, STRIP_X1 = 155;   // prop range along the strip
+const GROUND_W = 800, GROUND_D = 520;   // matches the backdrop base — edges only die in fog
 
 const rnd = (i) => { const x = Math.sin(i * 91.7 + 47.3) * 43758.5453; return x - Math.floor(x); };
 
@@ -52,7 +52,7 @@ function lightPool(g, x, z, r, color, opacity = 0.5) {
   return p;
 }
 
-// ---------- small prop builders ----------
+// ---------- prop builders ----------
 function tree(g, x, z, s = 1) {
   cyl(g, 0.09 * s, 0.13 * s, 0.6 * s, mat(0x4a3823, { rough: 0.9 }), x, 0.3 * s, z, 6);
   B(g, new THREE.ConeGeometry(0.75 * s, 1.9 * s, 7), mat(0x1f4527, { rough: 0.95, emissive: 0x1f4527, eInt: 0.12 }), x, 1.4 * s, z);
@@ -67,7 +67,6 @@ function house(g, x, z, ry, tint) {
   plate(grp, 0.5, 0.4, mat(0xffd9a0, { emissive: 0xffca70, eInt: 0.7 }), 0.7, 0.9, 1.11);
   grp.position.set(x, 0, z); grp.rotation.y = ry;
   g.add(grp);
-  // porch glow
   const fx = x + Math.sin(ry) * 1.6, fz = z + Math.cos(ry) * 1.6;
   lightPool(g, fx, fz, 1.5, 0xffca70, 0.35);
 }
@@ -100,8 +99,8 @@ function spire(g, x, z, w, h, seamColor, phase) {
   lightPool(g, x, z, w * 2.4, seamColor, 0.35);
 }
 
-// ---------- per-zone road segment ----------
-function road(g, x0, x1, surface, markings) {
+function road(g, surface, markings) {
+  const x0 = STRIP_X0 - 10, x1 = STRIP_X1 + 10;
   const wSeg = x1 - x0, cx = (x0 + x1) / 2;
   box(g, wSeg, 0.02, ROAD_W, mat(surface, { rough: 0.95, emissive: surface, eInt: 0.18 }), cx, -0.03, ROAD_Z);
   if (markings === 'dashes') {
@@ -113,142 +112,134 @@ function road(g, x0, x1, surface, markings) {
   }
 }
 
-function ground(g, x0, x1, color) {
-  // slight self-illumination keeps terrain readable at long range
-  const p = plate(g, x1 - x0, GROUND_DEPTH, mat(color, { rough: 0.97, emissive: color, eInt: 0.38 }), (x0 + x1) / 2, -0.06, 0);
+function ground(g, color) {
+  // same footprint as the backdrop base: the edge only ever dies in fog
+  const p = plate(g, GROUND_W, GROUND_D, mat(color, { rough: 0.97, emissive: color, eInt: 0.38 }), 55, -0.06, 0);
   p.rotation.x = -Math.PI / 2;
 }
 
-// ---------- zone builders (era 0..6) ----------
-const zoneBuilders = [
-  // 0 — rural field: grass, dirt road, trees, fence posts
-  (g, def, x0, x1) => {
-    ground(g, x0, x1, 0x263c20);
-    road(g, x0, x1, 0x3c362b, null);
-    const back = -def.d / 2 - 3;
-    for (let i = 0; i < 7; i++) tree(g, x0 + 1.5 + rnd(i) * (x1 - x0 - 3), back - 2 - rnd(i + 9) * 14, 0.8 + rnd(i + 4));
-    for (let i = 0; i < 3; i++) tree(g, x0 + 1 + rnd(i + 20) * (x1 - x0 - 2), def.d / 2 + 3.5 + rnd(i + 30) * 3, 0.7 + rnd(i + 40) * 0.6);
+// scatter helper: deterministic positions along the strip
+function scatter(count, seed, fn) {
+  for (let i = 0; i < count; i++) {
+    const x = STRIP_X0 + rnd(seed + i * 7) * (STRIP_X1 - STRIP_X0);
+    fn(x, i);
+  }
+}
+const zBack = (seed) => -13 - rnd(seed) * 22;    // behind the rooms
+const zFront = (seed) => 16 + rnd(seed) * 12;    // beyond the road
+
+// ---------- full-world era variants ----------
+const worldBuilders = [
+  // 0 — countryside: fields, dirt road, trees, fences
+  (g) => {
+    ground(g, 0x263c20);
+    road(g, 0x3c362b, null);
+    scatter(20, 100, (x, i) => tree(g, x, zBack(100 + i), 0.8 + rnd(i + 4)));
+    scatter(8, 140, (x, i) => tree(g, x, zFront(140 + i), 0.7 + rnd(i + 40) * 0.6));
     const post = mat(0x5c4a30, { rough: 0.9 });
-    for (let x = x0 + 1; x < x1; x += 2.2) box(g, 0.08, 0.7, 0.08, post, x, 0.35, back - 0.5);
-    // a lone yard light by the garage
-    streetlamp(g, def.x + def.w / 2 + 2, def.d / 2 + 2);
+    for (let x = STRIP_X0; x < STRIP_X1; x += 3.5) box(g, 0.08, 0.7, 0.08, post, x, 0.35, -11.5);
+    streetlamp(g, 6.5, 6.5); // lone yard light by the garage
   },
-  // 1 — suburbs: lawns, asphalt road, houses, trees
-  (g, def, x0, x1) => {
-    ground(g, x0, x1, 0x28401f);
-    road(g, x0, x1, 0x33363a, 'dashes');
-    const back = -def.d / 2 - 5;
-    house(g, x0 + 2.5, back - 2, 0.15, 0x9a8a72);
-    house(g, (x0 + x1) / 2, back - 4, -0.1, 0x8a7a66);
-    house(g, x1 - 2.5, back - 1.5, 0.3, 0xa4947c);
-    for (let i = 0; i < 4; i++) tree(g, x0 + 1 + rnd(i + 50) * (x1 - x0 - 2), back - 8 - rnd(i + 60) * 6, 0.9 + rnd(i + 70) * 0.5);
-    streetlamp(g, (x0 + x1) / 2, ROAD_Z - ROAD_W / 2 - 0.6);
+  // 1 — suburbs: lawns, houses everywhere, asphalt road
+  (g) => {
+    ground(g, 0x28401f);
+    road(g, 0x33363a, 'dashes');
+    const tints = [0x9a8a72, 0x8a7a66, 0xa4947c, 0x94846a];
+    scatter(12, 200, (x, i) => house(g, x, -14.5 - rnd(200 + i) * 6, rnd(i) * 0.6 - 0.3, tints[i % 4]));
+    scatter(4, 230, (x, i) => house(g, x, zFront(230 + i) + 3, Math.PI + rnd(i) * 0.5 - 0.25, tints[(i + 2) % 4]));
+    scatter(10, 260, (x, i) => tree(g, x, zBack(260 + i) - 6, 0.9 + rnd(i + 70) * 0.5));
+    for (let x = STRIP_X0 + 10; x < STRIP_X1; x += 34) streetlamp(g, x, ROAD_Z - ROAD_W / 2 - 0.6);
   },
-  // 2 — office town: pavement, small office blocks, streetlamps
-  (g, def, x0, x1) => {
-    ground(g, x0, x1, 0x323740);
-    road(g, x0, x1, 0x33363a, 'dashes');
-    const back = -def.d / 2 - 4;
-    tower(g, x0 + 3, back - 4, 4, 7, 4, coolWin, 1.0, 0xcfe4ff);
-    tower(g, (x0 + x1) / 2 + 1, back - 7, 5, 10, 5, coolWin, 1.0, 0xcfe4ff);
-    tower(g, x1 - 3.5, back - 3, 3.5, 5.5, 3.5, warmWin, 1.0, 0xffd9a0);
-    streetlamp(g, x0 + 3, ROAD_Z - ROAD_W / 2 - 0.6);
-    streetlamp(g, x1 - 3, ROAD_Z - ROAD_W / 2 - 0.6);
+  // 2 — office town: pavement, low office blocks, lamps
+  (g) => {
+    ground(g, 0x323740);
+    road(g, 0x33363a, 'dashes');
+    scatter(9, 300, (x, i) => {
+      const h = 5 + rnd(300 + i) * 6;
+      tower(g, x, -17 - rnd(310 + i) * 8, 3.5 + rnd(i) * 1.5, h, 3.5 + rnd(i + 9) * 1.5,
+        i % 3 === 2 ? warmWin : coolWin, 1.0, i % 3 === 2 ? 0xffd9a0 : 0xcfe4ff);
+    });
+    scatter(3, 340, (x, i) => tower(g, x, zFront(340 + i) + 6, 3.5, 4.5 + rnd(i) * 3, 3.5, warmWin, 1.0, 0xffd9a0));
+    scatter(6, 360, (x, i) => tree(g, x, zBack(360 + i) - 12, 0.8 + rnd(i) * 0.4));
+    for (let x = STRIP_X0 + 6; x < STRIP_X1; x += 26) streetlamp(g, x, ROAD_Z - ROAD_W / 2 - 0.6);
   },
-  // 3 — city edge: midrises with mixed windows and a neon accent
-  (g, def, x0, x1) => {
-    ground(g, x0, x1, 0x2b2e35);
-    road(g, x0, x1, 0x33363a, 'dashes');
-    const back = -def.d / 2 - 4;
-    tower(g, x0 + 3, back - 5, 4.5, 12, 4.5, warmWin, 1.0, 0xffd9a0);
-    tower(g, x0 + 9, back - 9, 5, 15, 5, coolWin, 1.0, 0xcfe4ff);
-    tower(g, x1 - 8, back - 6, 4, 10, 4, warmWin, 1.0, 0xffd9a0);
-    tower(g, x1 - 2.5, back - 3, 3.5, 8, 3.5, coolWin, 1.0, 0xcfe4ff);
-    // neon strip on a facade
-    box(g, 0.12, 6, 0.12, blinkMat(0xff2bd6, { speed: 1.1, min: 0.5, max: 2.0 }), x0 + 5.3, 6, back - 2.7);
-    lightPool(g, x0 + 5.3, back - 1.4, 2.4, 0xff2bd6, 0.3);
-    streetlamp(g, (x0 + x1) / 2, ROAD_Z - ROAD_W / 2 - 0.6);
+  // 3 — city edge: midrises, neon accents
+  (g) => {
+    ground(g, 0x2b2e35);
+    road(g, 0x33363a, 'dashes');
+    scatter(11, 400, (x, i) => {
+      const h = 8 + rnd(400 + i) * 8;
+      tower(g, x, -17 - rnd(410 + i) * 10, 4 + rnd(i) * 1.5, h, 4 + rnd(i + 9) * 1.5,
+        i % 2 ? warmWin : coolWin, 1.0, i % 2 ? 0xffd9a0 : 0xcfe4ff);
+      if (i % 4 === 1) {
+        box(g, 0.12, h * 0.5, 0.12, blinkMat(0xff2bd6, { speed: 1.1, min: 0.5, max: 2.0, phase: i }), x + 2.3, h * 0.5, -14.5 - rnd(410 + i) * 10 + 2.3);
+      }
+    });
+    scatter(4, 440, (x, i) => tower(g, x, zFront(440 + i) + 8, 4, 6 + rnd(i) * 5, 4, coolWin, 1.0, 0xcfe4ff));
+    for (let x = STRIP_X0 + 6; x < STRIP_X1; x += 24) streetlamp(g, x, ROAD_Z - ROAD_W / 2 - 0.6);
   },
-  // 4 — industrial: warehouses, stacks, power masts
-  (g, def, x0, x1) => {
-    ground(g, x0, x1, 0x282c31);
-    road(g, x0, x1, 0x36393d, 'dashes');
-    const back = -def.d / 2 - 4;
-    box(g, 9, 3.4, 6, mat(0x3a4046, { rough: 0.8, metal: 0.2 }), x0 + 6, 1.7, back - 5);
-    box(g, 9, 0.4, 6.4, mat(0x2e3338, { rough: 0.8 }), x0 + 6, 3.6, back - 5);
-    box(g, 7, 2.8, 5, mat(0x424851, { rough: 0.8, metal: 0.2 }), x1 - 5, 1.4, back - 8);
-    cyl(g, 0.5, 0.7, 6, mat(0x4a525b, { rough: 0.7, metal: 0.3 }), x0 + 2.5, 3, back - 9, 10);
-    cyl(g, 0.4, 0.55, 4.5, mat(0x4a525b, { rough: 0.7, metal: 0.3 }), x0 + 4.2, 2.25, back - 10, 10);
-    mast(g, (x0 + x1) / 2, back - 13, 7);
-    mast(g, x1 - 2, back - 11, 5.5);
-    // sodium-vapor yard lighting
-    streetlamp(g, x0 + 6, back - 1);
-    streetlamp(g, x1 - 5, back - 4.5);
-    lightPool(g, x0 + 6, back - 5, 4.5, 0xffb060, 0.22);
+  // 4 — industrial belt: warehouses, stacks, power masts, yard lights
+  (g) => {
+    ground(g, 0x282c31);
+    road(g, 0x36393d, 'dashes');
+    scatter(6, 500, (x, i) => {
+      const wz = -18 - rnd(500 + i) * 8;
+      box(g, 8 + rnd(i) * 3, 3 + rnd(i + 3), 5.5, mat(0x3a4046, { rough: 0.8, metal: 0.2 }), x, 1.6, wz);
+      box(g, 8.4 + rnd(i) * 3, 0.4, 5.9, mat(0x2e3338, { rough: 0.8 }), x, 3.3 + rnd(i + 3) * 0.5, wz);
+      streetlamp(g, x + 3, wz + 5);
+    });
+    scatter(4, 540, (x, i) => cyl(g, 0.45 + rnd(i) * 0.15, 0.65, 5 + rnd(540 + i) * 3, mat(0x4a525b, { rough: 0.7, metal: 0.3 }), x, 2.5 + rnd(540 + i) * 1.5, -26 - rnd(i) * 6, 10));
+    scatter(5, 570, (x, i) => mast(g, x, -30 - rnd(570 + i) * 10, 5 + rnd(i) * 3));
+    scatter(3, 590, (x, i) => box(g, 6, 2.4, 4.5, mat(0x424851, { rough: 0.8, metal: 0.2 }), x, 1.2, zFront(590 + i) + 8));
   },
-  // 5 — tech campus: glass towers, glowing ground seams, antennas
-  (g, def, x0, x1) => {
-    ground(g, x0, x1, 0x1d222a);
-    road(g, x0, x1, 0x2a2e36, 'glow');
-    const back = -def.d / 2 - 5;
-    tower(g, x0 + 5, back - 6, 5, 16, 5, techWin, 1.2, 0x38e0ff);
-    tower(g, x0 + 14, back - 10, 6, 21, 6, techWin, 1.2, 0x38e0ff);
-    tower(g, x1 - 10, back - 7, 5, 13, 5, coolWin, 1.1, 0xcfe4ff);
-    tower(g, x1 - 3, back - 4, 4, 18, 4, techWin, 1.2, 0x38e0ff);
-    mast(g, x0 + 14, back - 10, 24.5);
-    // glowing campus seams
+  // 5 — tech metropolis: glass towers, glowing roads, antennas
+  (g) => {
+    ground(g, 0x1d222a);
+    road(g, 0x2a2e36, 'glow');
+    scatter(10, 600, (x, i) => {
+      const h = 12 + rnd(600 + i) * 12;
+      tower(g, x, -18 - rnd(610 + i) * 12, 4.5 + rnd(i) * 2, h, 4.5 + rnd(i + 9) * 2,
+        i % 3 === 2 ? coolWin : techWin, 1.2, i % 3 === 2 ? 0xcfe4ff : 0x38e0ff);
+      if (i % 4 === 0) mast(g, x, -18 - rnd(610 + i) * 12, h + 4);
+    });
+    scatter(3, 650, (x, i) => tower(g, x, zFront(650 + i) + 10, 4, 8 + rnd(i) * 6, 4, techWin, 1.1, 0x38e0ff));
+    // glowing campus seams behind the rooms
     for (let i = 0; i < 2; i++)
-      box(g, x1 - x0 - 4, 0.008, 0.05, blinkMat(0x1c6dff, { speed: 0.5, min: 0.3, max: 0.9, phase: i * 2 }), (x0 + x1) / 2, -0.02, -def.d / 2 - 2 - i * 4);
+      box(g, STRIP_X1 - STRIP_X0, 0.008, 0.05, blinkMat(0x1c6dff, { speed: 0.5, min: 0.3, max: 0.9, phase: i * 2 }), 60, -0.02, -13 - i * 5);
   },
-  // 6 — future city: neon spires, a mega-tower, an orbiting ring
-  (g, def, x0, x1) => {
-    ground(g, x0, x1, 0x181d26);
-    road(g, x0, x1, 0x262b34, 'glow');
-    const back = -def.d / 2 - 5;
-    spire(g, x0 + 4, back - 6, 1.6, 19, 0x38e0ff, 0);
-    spire(g, x0 + 9, back - 12, 2.2, 26, 0xb18aff, 1.2);
-    spire(g, x1 - 9, back - 8, 1.8, 22, 0xff2bd6, 2.1);
-    spire(g, x1 - 3.5, back - 4, 1.3, 15, 0x38e0ff, 3.0);
-    // mega-tower with orbiting ring
-    const mx = (x0 + x1) / 2, mz = back - 16;
-    spire(g, mx, mz, 3, 32, 0x38e0ff, 0.6);
-    const ring = B(g, new THREE.TorusGeometry(3.4, 0.12, 8, 40), blinkMat(0x38e0ff, { speed: 0.7, min: 0.6, max: 1.6 }), mx, 24, mz);
-    ring.rotation.x = Math.PI / 2;
-    ring.userData.spin = { axis: 'z', speed: 0.15 };
-    // circuit lines on the ground
-    for (let i = 0; i < 3; i++) {
-      const zz = def.d / 2 + 4 + i * 2.5;
-      box(g, x1 - x0 - 6, 0.008, 0.04, blinkMat([0x38e0ff, 0xb18aff, 0xff2bd6][i], { speed: 0.4 + i * 0.2, min: 0.3, max: 1.0, phase: i }), (x0 + x1) / 2, -0.02, -zz - def.d);
+  // 6 — future city: neon spires everywhere, mega-towers with rings
+  (g) => {
+    ground(g, 0x181d26);
+    road(g, 0x262b34, 'glow');
+    const seams = [0x38e0ff, 0xb18aff, 0xff2bd6];
+    scatter(13, 700, (x, i) => {
+      spire(g, x, -16 - rnd(700 + i) * 16, 1.3 + rnd(i) * 1.2, 14 + rnd(710 + i) * 14, seams[i % 3], i * 0.8);
+    });
+    scatter(4, 750, (x, i) => spire(g, x, zFront(750 + i) + 10, 1.2 + rnd(i), 10 + rnd(i) * 8, seams[(i + 1) % 3], i * 1.3));
+    // two mega-towers with orbiting rings
+    for (const [mx, mz, i] of [[38, -34, 0], [102, -30, 1]]) {
+      spire(g, mx, mz, 3, 30 + i * 4, 0x38e0ff, 0.6 + i);
+      const ring = B(g, new THREE.TorusGeometry(3.4, 0.12, 8, 40), blinkMat(0x38e0ff, { speed: 0.7, min: 0.6, max: 1.6, phase: i }), mx, 22 + i * 4, mz);
+      ring.rotation.x = Math.PI / 2;
+      ring.userData.spin = { axis: 'z', speed: 0.15 + i * 0.05 };
     }
+    // circuit lines on the ground
+    for (let i = 0; i < 3; i++)
+      box(g, STRIP_X1 - STRIP_X0, 0.008, 0.04, blinkMat(seams[i], { speed: 0.4 + i * 0.2, min: 0.3, max: 1.0, phase: i }), 60, -0.02, 17 + i * 3);
   },
 ];
-
-// zone x-boundaries: midpoints between room centers, padded at the ends
-function zoneBounds() {
-  const xs = ROOMS.map((r) => r.x);
-  const bounds = [];
-  for (let i = 0; i < xs.length; i++) {
-    const x0 = i === 0 ? xs[0] - 20 : (xs[i - 1] + xs[i]) / 2;
-    const x1 = i === xs.length - 1 ? xs[i] + 22 : (xs[i] + xs[i + 1]) / 2;
-    bounds.push([x0, x1]);
-  }
-  return bounds;
-}
 
 // Always-visible distant layer: base ground, hills to the west,
 // a skyline that grows taller toward the future end of the strip.
 export function buildBackdrop(scene) {
   const g = new THREE.Group();
-  // base ground under everything — no more void below the horizon
-  const base = plate(g, 800, 520, mat(0x161b1e, { rough: 1, emissive: 0x161b1e, eInt: 0.35 }), 55, -0.12, 0);
+  const base = plate(g, GROUND_W, GROUND_D, mat(0x161b1e, { rough: 1, emissive: 0x161b1e, eInt: 0.35 }), 55, -0.12, 0);
   base.rotation.x = -Math.PI / 2;
-  // western hills
   for (let i = 0; i < 5; i++) {
     const r = 26 + rnd(i) * 22, h = 9 + rnd(i + 3) * 11;
     const hill = B(g, new THREE.ConeGeometry(r, h, 6), mat(0x18261c, { rough: 1, emissive: 0x18261c, eInt: 0.16 }), -95 + i * 38 + rnd(i + 7) * 10, h / 2 - 1.5, -85 - rnd(i + 11) * 25);
     hill.rotation.y = rnd(i + 5) * Math.PI;
   }
-  // distant skyline: taller and denser toward the east (future) end
   for (let i = 0; i < 14; i++) {
     const x = 8 + i * 12 + rnd(i + 20) * 6;
     const grow = x / 160;
@@ -258,24 +249,22 @@ export function buildBackdrop(scene) {
     box(g, w, h, w, mat(0x121620, { rough: 0.9, emissive: 0x121620, eInt: 0.16 }), x, h / 2, z);
     plate(g, w * 0.9, h * 0.9, screenMat(coolWin, 0.45), x, h / 2, z + w / 2 + 0.02);
   }
-  // a few mega-silhouettes past the vault
   for (let i = 0; i < 3; i++) {
     const x = 132 + i * 16, h = 26 + rnd(i + 60) * 14;
     box(g, 6, h, 6, mat(0x121620, { rough: 0.9, emissive: 0x121620, eInt: 0.16 }), x, h / 2, -70 - rnd(i + 70) * 15);
     box(g, 0.14, h * 0.9, 0.14, blinkMat(0x38e0ff, { speed: 0.5, min: 0.3, max: 1.2, phase: i }), x + 3, h / 2, -67 - rnd(i + 70) * 15);
   }
-  // aircraft-warning blinks on two distant towers
   B(g, sphereGeo(0.3, 8), blinkMat(0xff2233, { speed: 1.1, min: 0.1, max: 2.0 }), 92, 24, -75);
   B(g, sphereGeo(0.3, 8), blinkMat(0xff2233, { speed: 1.3, min: 0.1, max: 2.0, phase: 2 }), 148, 38, -78);
   scene.add(g);
   return g;
 }
 
-export function buildOutsideZones(scene) {
-  const bounds = zoneBounds();
-  return ROOMS.map((def, era) => {
+// One hidden full-world group per era; world.js shows the latest one.
+export function buildOutdoorWorlds(scene) {
+  return worldBuilders.map((build) => {
     const g = new THREE.Group();
-    zoneBuilders[era](g, def, bounds[era][0], bounds[era][1]);
+    build(g);
     g.visible = false;
     scene.add(g);
     return g;
