@@ -196,6 +196,42 @@ function zoneBounds() {
   return bounds;
 }
 
+// Always-visible distant layer: base ground, hills to the west,
+// a skyline that grows taller toward the future end of the strip.
+export function buildBackdrop(scene) {
+  const g = new THREE.Group();
+  // base ground under everything — no more void below the horizon
+  const base = plate(g, 800, 520, mat(0x0a0d10, { rough: 1 }), 55, -0.12, 0);
+  base.rotation.x = -Math.PI / 2;
+  // western hills
+  for (let i = 0; i < 5; i++) {
+    const r = 26 + rnd(i) * 22, h = 9 + rnd(i + 3) * 11;
+    const hill = B(g, new THREE.ConeGeometry(r, h, 6), mat(0x0b130e, { rough: 1 }), -95 + i * 38 + rnd(i + 7) * 10, h / 2 - 1.5, -85 - rnd(i + 11) * 25);
+    hill.rotation.y = rnd(i + 5) * Math.PI;
+  }
+  // distant skyline: taller and denser toward the east (future) end
+  for (let i = 0; i < 14; i++) {
+    const x = 8 + i * 12 + rnd(i + 20) * 6;
+    const grow = x / 160;
+    const w = 4 + rnd(i + 30) * 3.5;
+    const h = 5 + grow * 20 + rnd(i + 40) * 9;
+    const z = -62 - rnd(i + 50) * 28;
+    box(g, w, h, w, mat(0x07090c, { rough: 0.9 }), x, h / 2, z);
+    plate(g, w * 0.9, h * 0.9, screenMat(coolWin, 0.3), x, h / 2, z + w / 2 + 0.02);
+  }
+  // a few mega-silhouettes past the vault
+  for (let i = 0; i < 3; i++) {
+    const x = 132 + i * 16, h = 26 + rnd(i + 60) * 14;
+    box(g, 6, h, 6, mat(0x07090c, { rough: 0.9 }), x, h / 2, -70 - rnd(i + 70) * 15);
+    box(g, 0.14, h * 0.9, 0.14, blinkMat(0x38e0ff, { speed: 0.5, min: 0.3, max: 1.2, phase: i }), x + 3, h / 2, -67 - rnd(i + 70) * 15);
+  }
+  // aircraft-warning blinks on two distant towers
+  B(g, sphereGeo(0.3, 8), blinkMat(0xff2233, { speed: 1.1, min: 0.1, max: 2.0 }), 92, 24, -75);
+  B(g, sphereGeo(0.3, 8), blinkMat(0xff2233, { speed: 1.3, min: 0.1, max: 2.0, phase: 2 }), 148, 38, -78);
+  scene.add(g);
+  return g;
+}
+
 export function buildOutsideZones(scene) {
   const bounds = zoneBounds();
   return ROOMS.map((def, era) => {

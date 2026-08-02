@@ -13,27 +13,66 @@ import { ROOMS } from './rooms.js';
 import { mat, box, plate, screenTex, screenMat } from './helpers.js';
 import { rackFrame, museumShelf, desk } from './models.js';
 import { Placement, CAPS } from './placement.js';
-import { buildOutsideZones } from './outside.js';
+import { buildOutsideZones, buildBackdrop } from './outside.js';
 import { updateFX, tween, finishTweens, easeInOut, setParticleScene, burst, registerSpins } from './fx.js';
 
 export function initWorld(container) {
   // ---------- renderer ----------
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+  renderer.setPixelRatio(Math.min(1.75, window.devicePixelRatio));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  renderer.toneMappingExposure = 1.15;
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x030706);
-  scene.fog = new THREE.Fog(0x030706, 16, 105);
+  scene.fog = new THREE.Fog(0x05090a, 30, 230);
+
+  // ---------- sky: gradient dome, stars, moon ----------
+  const sky = new THREE.Mesh(
+    new THREE.SphereGeometry(520, 24, 14),
+    new THREE.ShaderMaterial({
+      side: THREE.BackSide, depthWrite: false, fog: false,
+      vertexShader: 'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: `varying vec3 vP;
+        void main(){
+          float h = clamp(normalize(vP).y * 2.4, 0.0, 1.0);
+          vec3 hor = vec3(0.030, 0.062, 0.052);   // phosphor city-glow horizon
+          vec3 zen = vec3(0.004, 0.007, 0.011);
+          gl_FragColor = vec4(mix(hor, zen, h), 1.0);
+        }`,
+    })
+  );
+  scene.add(sky);
+  {
+    const starPos = [];
+    for (let i = 0; i < 650; i++) {
+      const a = Math.random() * Math.PI * 2, e = 0.06 + Math.random() * 1.4;
+      const r = 470;
+      starPos.push(r * Math.cos(e) * Math.cos(a), r * Math.sin(e), r * Math.cos(e) * Math.sin(a));
+    }
+    const sg = new THREE.BufferGeometry();
+    sg.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
+    scene.add(new THREE.Points(sg, new THREE.PointsMaterial({
+      color: 0xaebfca, size: 1.6, sizeAttenuation: false,
+      transparent: true, opacity: 0.7, fog: false, depthWrite: false,
+    })));
+    const halo = new THREE.Mesh(new THREE.CircleGeometry(30, 24),
+      new THREE.MeshBasicMaterial({ color: 0x1c262e, transparent: true, opacity: 0.55, fog: false }));
+    halo.position.set(-150, 200, -340); halo.lookAt(0, 0, 0);
+    scene.add(halo);
+    const moon = new THREE.Mesh(new THREE.CircleGeometry(15, 24),
+      new THREE.MeshBasicMaterial({ color: 0xd8e2ea, fog: false }));
+    moon.position.set(-149, 199, -337.5); moon.lookAt(0, 0, 0);
+    scene.add(moon);
+  }
 
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
   scene.environmentIntensity = 0.35;
 
-  const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 300);
+  const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 900);
   camera.position.set(3, 4.5, 9);
 
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -43,15 +82,19 @@ export function initWorld(container) {
   controls.enablePan = true;
   controls.panSpeed = 0.6;
   controls.minDistance = 2;
-  controls.maxDistance = 70;
+  controls.maxDistance = 160;
   controls.maxPolarAngle = 1.48;
   controls.autoRotateSpeed = 0.55; // gentle orbit once a zoom lands
   controls.addEventListener('start', () => { controls.autoRotate = false; }); // user takes over
 
   // ---------- lights ----------
-  scene.add(new THREE.AmbientLight(0x8090a8, 0.5));
-  const hemi = new THREE.HemisphereLight(0xbcc7d6, 0x2a2620, 0.4);
+  scene.add(new THREE.AmbientLight(0x8090a8, 0.55));
+  const hemi = new THREE.HemisphereLight(0xbcc7d6, 0x2a2620, 0.55);
   scene.add(hemi);
+  // cool moonlight so distant geometry keeps its shape
+  const moonLight = new THREE.DirectionalLight(0x8fa8d8, 0.4);
+  moonLight.position.set(-60, 90, 50);
+  scene.add(moonLight);
 
   // ---------- rooms ----------
   const roomGroups = [];
@@ -67,7 +110,7 @@ export function initWorld(container) {
     box(g, w, WALL_H, 0.12, wallMat, 0, WALL_H / 2, -d / 2);          // back
     box(g, 0.12, WALL_H, d, wallMat, -w / 2, WALL_H / 2, 0);          // left
     box(g, 0.12, WALL_H, d, wallMat, w / 2, WALL_H / 2, 0);           // right
-    const pl = new THREE.PointLight(light, lightInt, Math.max(w, d) * 1.6, 1.8);
+    const pl = new THREE.PointLight(light, lightInt, Math.max(w, d) * 2.4, 1.8);
     pl.position.set(0, WALL_H - 0.4, 0.5);
     g.add(pl);
     roomLights[def.era] = pl;
@@ -205,6 +248,12 @@ export function initWorld(container) {
   // ---------- outside zones (revealed with their rooms) ----------
   const outsideGroups = buildOutsideZones(scene);
   for (const g of outsideGroups) registerSpins(g);
+  const backdrop = buildBackdrop(scene);
+
+  // static geometry never moves — freeze matrices to skip per-frame updates
+  for (const grp of [...roomGroups, ...outsideGroups, backdrop]) {
+    grp.traverse((o) => { if (o.isMesh) { o.updateMatrix(); o.matrixAutoUpdate = false; } });
+  }
 
   // ---------- placement ----------
   const placement = new Placement(scene);

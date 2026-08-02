@@ -166,6 +166,27 @@ const metricsTex = screenTex(96, 64, (c, w, h, f) => {
   }
 }, 2);
 
+// keyboards as single textured plates (was: 40-52 tiny meshes per machine)
+function kbTexture(cols, rows, keyCol, gapCol) {
+  return screenTex(cols * 12, rows * 12, (c, w, h) => {
+    c.fillStyle = gapCol; c.fillRect(0, 0, w, h);
+    for (let r = 0; r < rows; r++) {
+      for (let k = 0; k < cols; k++) {
+        c.fillStyle = keyCol;
+        c.fillRect(k * 12 + 2, r * 12 + 2, 9, 9);
+        c.fillStyle = 'rgba(255,255,255,0.10)';
+        c.fillRect(k * 12 + 2, r * 12 + 2, 9, 2);
+      }
+    }
+  }, 0);
+}
+function kbMat(cols, rows, keyCol, gapCol) {
+  return new THREE.MeshStandardMaterial({ map: kbTexture(cols, rows, keyCol, gapCol), roughness: 0.8 });
+}
+const ibmKb = kbMat(10, 4, '#3b3b38', '#b7ab8b');
+const appleKb = kbMat(12, 4, '#4a3b2c', '#c6bb9a');
+const c64Kb = kbMat(13, 4, '#4c4438', '#a89c84');
+
 // ---------- shared props ----------
 export function desk(w = 1.1, d = 0.6, topColor = WOOD) {
   const g = new THREE.Group();
@@ -222,9 +243,7 @@ function ibm5100() {
   box(g, 0.15, 0.11, 0.015, mat(DARK, { rough: 0.4 }), -0.14, 0.11, 0.181);
   plate(g, 0.115, 0.082, screenMat(ibmTex, 1.4), -0.14, 0.11, 0.19);
   box(g, 0.26, 0.1, 0.012, mat(PUTTY, { rough: 0.7 }), 0.08, 0.09, 0.181); // keyboard plate
-  const keyM = mat(0x3b3b38, { rough: 0.6 });
-  for (let r = 0; r < 4; r++) for (let c = 0; c < 10; c++)
-    box(g, 0.017, 0.008, 0.012, keyM, -0.02 + c * 0.023, 0.062 + r * 0.024, 0.19);
+  plate(g, 0.24, 0.096, ibmKb, 0.08, 0.098, 0.188);
   // side vents
   box(g, 0.015, 0.12, 0.28, mat(0xbfb694, { rough: 0.8 }), 0.243, 0.1, 0);
   return g;
@@ -253,9 +272,8 @@ function appleII() {
   rbox(mach, 0.44, 0.11, 0.42, 0.015, beige, 0, 0.055, -0.03);
   const slope = rbox(mach, 0.44, 0.02, 0.17, 0.008, beige, 0, 0.045, 0.2);
   slope.rotation.x = -0.22;
-  const keyM = mat(0x4a3b2c, { rough: 0.6 });
-  for (let r = 0; r < 4; r++) for (let c = 0; c < 12; c++)
-    box(mach, 0.02, 0.013, 0.016, keyM, -0.13 + c * 0.024, 0.062 - r * 0.011, 0.145 + r * 0.038);
+  const akb = plate(mach, 0.3, 0.15, appleKb, 0, 0.05, 0.2);
+  akb.rotation.x = -Math.PI / 2 + 0.28;
   // monitor
   const mon = new THREE.Group(); mon.position.set(0, 0.11, -0.06); mach.add(mon);
   rbox(mon, 0.3, 0.26, 0.3, 0.02, beige, 0, 0.14, 0);
@@ -280,9 +298,8 @@ function c64() {
   // breadbin
   const bin = rbox(mach, 0.42, 0.05, 0.2, 0.015, greige, 0, 0.028, 0.1);
   bin.rotation.x = -0.06;
-  const keyM = mat(0x4c4438, { rough: 0.6 });
-  for (let r = 0; r < 4; r++) for (let c = 0; c < 13; c++)
-    box(mach, 0.02, 0.012, 0.015, keyM, -0.15 + c * 0.025, 0.05, 0.045 + r * 0.038);
+  const ckb = plate(mach, 0.34, 0.16, c64Kb, 0, 0.056, 0.102);
+  ckb.rotation.x = -Math.PI / 2 - 0.06;
   // rainbow badge
   plate(mach, 0.05, 0.02, mat(0xcc3333, { emissive: 0x992222, eInt: 0.3 }), -0.16, 0.056, 0.028);
   // 1702 monitor
